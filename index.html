@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NOTAM Creator — UA Operations</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0a0e14;--surface:#0f1520;--card:#151d2e;--border:#1e2d45;
+  --accent:#00b4d8;--muted:#4a6080;--text:#c8d8f0;--label:#6a8aaa;
+  --green:#00d68f;--amber:#f0a500;--red:#ff4d6d;
+  --radius:8px;--font-mono:'JetBrains Mono',monospace;--font-ui:'Syne',sans-serif;
+}
+html,body{min-height:100vh;background:var(--ink);color:var(--text);font-family:var(--font-ui)}
+.wrap{max-width:1100px;margin:0 auto;padding:2rem 2rem 4rem}
+body.fs-mode .wrap{max-width:100%;padding:1.5rem 2.5rem 3rem}
+
+.header{display:flex;align-items:center;gap:16px;margin-bottom:1.75rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border)}
+.logo{width:48px;height:48px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.header-text h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px}
+.header-text p{font-size:12px;color:var(--label);margin-top:3px;font-family:var(--font-mono)}
+.header-right{display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:0}
+.badge{background:rgba(0,180,216,0.12);color:var(--accent);border:1px solid rgba(0,180,216,0.25);font-size:10px;font-family:var(--font-mono);padding:3px 10px;border-radius:4px;letter-spacing:0.5px}
+.btn-fs{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--label);font-size:11px;font-family:var(--font-mono);padding:7px 13px;border-radius:6px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.btn-fs:hover{background:rgba(0,180,216,0.1);border-color:var(--accent);color:var(--accent)}
+.btn-fs svg{flex-shrink:0}
+
+.body-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
+.col-left,.col-right{display:flex;flex-direction:column;gap:1rem}
+
+.section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.4rem}
+.section-title{font-size:10px;font-family:var(--font-mono);color:var(--accent);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;color:var(--label);font-family:var(--font-mono);letter-spacing:0.5px}
+.field input,.field select{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:10px 13px;font-size:13px;font-family:var(--font-mono);transition:border-color 0.15s;outline:none;width:100%}
+.field input:focus,.field select:focus{border-color:var(--accent);background:#0d1826}
+.field select option{background:#0f1520}
+.field input[readonly]{color:var(--accent);cursor:default}
+.hint{font-size:10px;color:var(--muted);font-family:var(--font-mono);margin-top:3px}
+
+.utc-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.utc-badge{background:rgba(0,214,143,0.08);border:1px solid rgba(0,214,143,0.2);color:var(--green);font-size:11px;font-family:var(--font-mono);padding:5px 10px;border-radius:6px;flex:1;white-space:nowrap}
+.utc-label{font-size:10px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap}
+
+.date-input-wrap{position:relative}
+.date-display{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:10px 13px;font-size:13px;font-family:var(--font-mono);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:border-color 0.15s;user-select:none}
+.date-display:hover{border-color:var(--accent)}
+.date-display.open{border-color:var(--accent);background:#0d1826}
+.date-display .cal-icon{color:var(--label);font-size:14px;flex-shrink:0}
+.date-display .date-val{flex:1}
+.cal-popup{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:1000;background:#111c2e;border:1px solid var(--border);border-radius:12px;padding:16px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.6)}
+.cal-popup.open{display:block}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-nav{background:none;border:1px solid var(--border);color:var(--label);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.cal-nav:hover{border-color:var(--accent);color:var(--accent)}
+.cal-month-label{font-size:13px;font-weight:700;color:#fff;font-family:var(--font-mono)}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.cal-dow span{text-align:center;font-size:10px;color:var(--muted);font-family:var(--font-mono);padding:4px 0}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-day{text-align:center;font-size:12px;font-family:var(--font-mono);padding:6px 2px;border-radius:6px;cursor:pointer;color:var(--text);transition:all 0.12s;border:1px solid transparent}
+.cal-day:hover{background:rgba(0,180,216,0.15);border-color:rgba(0,180,216,0.3);color:var(--accent)}
+.cal-day.today{border-color:rgba(0,180,216,0.3);color:var(--accent)}
+.cal-day.selected{background:var(--accent);color:#000;font-weight:700;border-color:var(--accent)}
+.cal-day.other-month{color:var(--muted)}
+.cal-day.disabled{color:#2a3a50;cursor:default;pointer-events:none}
+
+.time-input-wrap{position:relative}
+.time-input-inner{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color 0.15s}
+.time-input-inner:focus-within{border-color:var(--accent);background:#0d1826}
+.time-seg{background:none;border:none;color:var(--text);font-size:16px;font-family:var(--font-mono);font-weight:500;text-align:center;outline:none;width:44px;padding:10px 0;cursor:text}
+.time-seg::placeholder{color:var(--muted)}
+.time-sep{color:var(--label);font-size:16px;font-family:var(--font-mono);font-weight:700;padding:0 2px;user-select:none}
+.time-suffix{color:var(--muted);font-size:11px;font-family:var(--font-mono);padding:0 12px 0 6px}
+
+#map{height:480px;width:100%;border-radius:10px;border:1px solid var(--border);margin-bottom:12px;cursor:crosshair}
+.map-hint{font-size:11px;color:var(--label);font-family:var(--font-mono);margin-bottom:10px;padding:8px 12px;background:rgba(0,180,216,0.06);border:1px solid rgba(0,180,216,0.15);border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.map-hint-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1}
+.coords-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.coord-pill{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-family:var(--font-mono);font-size:12px}
+.coord-pill span{display:block;font-size:10px;color:var(--label);margin-bottom:3px}
+.coord-pill strong{color:var(--accent);font-size:13px}
+
+.btn-airspace{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--label);font-size:11px;font-family:var(--font-mono);padding:6px 12px;border-radius:6px;cursor:pointer;transition:all 0.15s;white-space:nowrap;flex-shrink:0}
+.btn-airspace:hover{background:rgba(0,180,216,0.1);border-color:var(--accent);color:var(--accent)}
+.btn-airspace.active{background:rgba(0,180,216,0.15);border-color:var(--accent);color:var(--accent)}
+
+.airspace-legend{display:none;margin-top:10px;padding:10px 14px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;gap:10px;flex-wrap:wrap}
+.airspace-legend.visible{display:flex}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:10px;font-family:var(--font-mono);color:var(--label)}
+.legend-dot{width:12px;height:12px;border-radius:2px;flex-shrink:0;border:1.5px solid}
+
+.map-search-wrap{position:relative;width:280px;flex-shrink:0}
+.map-search-wrap input{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:8px 36px 8px 12px;font-size:12px;font-family:var(--font-mono);outline:none;width:100%;transition:border-color 0.15s}
+.map-search-wrap input:focus{border-color:var(--accent);background:#0d1826}
+.map-search-wrap input::placeholder{color:var(--muted)}
+.map-search-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--label);cursor:pointer;padding:2px;display:flex;align-items:center;transition:color 0.15s}
+.map-search-btn:hover{color:var(--accent)}
+.map-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#111c2e;border:1px solid var(--border);border-radius:8px;z-index:2000;display:none;box-shadow:0 8px 24px rgba(0,0,0,0.6);max-height:220px;overflow-y:auto}
+.map-search-results.open{display:block}
+.search-result-item{padding:9px 13px;font-size:12px;font-family:var(--font-mono);color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s;line-height:1.4}
+.search-result-item:last-child{border-bottom:none}
+.search-result-item:hover{background:rgba(0,180,216,0.1);color:var(--accent)}
+.search-result-item .result-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.search-loading{padding:10px 13px;font-size:11px;color:var(--muted);font-family:var(--font-mono)}
+
+.aero-loading{font-size:11px;color:var(--muted);font-family:var(--font-mono);padding:8px 0;display:none;align-items:center;gap:8px}
+.aero-card{background:var(--surface);border:1px solid rgba(0,214,143,0.25);border-radius:10px;padding:13px 16px;margin-top:10px;display:none;align-items:center;gap:14px;transition:border-color 0.3s}
+.aero-card.visible{display:flex}
+.aero-card.applied{border-color:rgba(0,180,216,0.6)}
+.aero-icon{width:40px;height:40px;background:rgba(0,214,143,0.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.aero-info{flex:1;min-width:0}
+.aero-name{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aero-meta{font-size:11px;font-family:var(--font-mono);color:var(--label);margin-top:3px;line-height:1.6}
+.aero-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.aero-icao{font-size:20px;font-weight:800;color:var(--green);font-family:var(--font-mono)}
+.aero-dist{font-size:11px;font-family:var(--font-mono);color:var(--amber)}
+.use-aero-btn{background:var(--green);border:2px solid var(--green);color:#000;font-size:13px;font-weight:700;font-family:var(--font-ui);padding:10px 22px;border-radius:8px;cursor:pointer;transition:all 0.15s;white-space:nowrap;letter-spacing:0.3px;box-shadow:0 0 16px rgba(0,214,143,0.35)}
+.use-aero-btn:hover{background:#00f0a0;border-color:#00f0a0;box-shadow:0 0 24px rgba(0,214,143,0.55);transform:translateY(-1px)}
+
+.radius-control{background:var(--surface);border:1px solid rgba(0,180,216,0.3);border-radius:10px;padding:14px 16px;margin-top:12px}
+.radius-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.radius-label{font-size:10px;font-family:var(--font-mono);color:var(--label);letter-spacing:0.8px;text-transform:uppercase}
+.radius-value{font-size:22px;font-weight:800;color:var(--accent);font-family:var(--font-mono);line-height:1}
+.radius-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;background:linear-gradient(to right,var(--accent) 0%,var(--accent) var(--pct,13%),rgba(255,255,255,0.1) var(--pct,13%));border-radius:3px;outline:none;cursor:pointer;margin:4px 0 12px}
+.radius-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:var(--accent);border:3px solid #0a1628;box-shadow:0 0 8px rgba(0,180,216,0.5);cursor:pointer;transition:box-shadow 0.15s}
+.radius-slider::-webkit-slider-thumb:hover{box-shadow:0 0 16px rgba(0,180,216,0.8)}
+.radius-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--accent);border:3px solid #0a1628;box-shadow:0 0 8px rgba(0,180,216,0.5);cursor:pointer}
+.radius-presets{display:flex;gap:7px;flex-wrap:wrap}
+.radius-preset{background:rgba(0,180,216,0.06);border:1px solid rgba(0,180,216,0.2);color:var(--label);font-size:11px;font-family:var(--font-mono);padding:5px 11px;border-radius:6px;cursor:pointer;transition:all 0.15s}
+.radius-preset:hover,.radius-preset.active{background:rgba(0,180,216,0.18);border-color:var(--accent);color:var(--accent)}
+
+.freq-suggest{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.freq-chip{background:rgba(0,119,182,0.15);border:1px solid rgba(0,119,182,0.3);color:#7ec8e3;font-size:11px;font-family:var(--font-mono);padding:5px 10px;border-radius:5px;cursor:pointer;transition:all 0.15s}
+.freq-chip:hover{background:rgba(0,180,216,0.2);border-color:var(--accent);color:var(--accent)}
+.freq-chip.active{background:rgba(0,180,216,0.25);border-color:var(--accent);color:var(--accent)}
+
+.btn-generate{width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:11px;font-size:15px;font-weight:800;font-family:var(--font-ui);cursor:pointer;letter-spacing:0.3px;transition:all 0.15s}
+.btn-generate:hover{background:#00cff5;transform:translateY(-1px)}
+.btn-generate:active{transform:translateY(0)}
+
+.output-section{background:#060b11;border:1px solid var(--border);border-radius:12px;padding:1.4rem;display:none}
+.output-section.visible{display:block}
+.output-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.output-title{font-size:10px;font-family:var(--font-mono);color:var(--green);letter-spacing:1.5px;text-transform:uppercase}
+.copy-btn{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--label);font-size:11px;font-family:var(--font-mono);padding:6px 14px;border-radius:6px;cursor:pointer;transition:all 0.15s}
+.copy-btn:hover{background:rgba(0,180,216,0.1);border-color:var(--accent);color:var(--accent)}
+.notam-text{font-family:var(--font-mono);font-size:13.5px;line-height:1.9;color:#e0f0ff;white-space:pre-wrap;letter-spacing:0.3px}
+
+/* NAIPS PORTAL FIELDS */
+.naips-section{background:#060b11;border:1px solid var(--border);border-radius:12px;padding:1.4rem;display:none;margin-top:1rem}
+.naips-section.visible{display:block}
+.naips-title{font-size:10px;font-family:var(--font-mono);color:var(--amber);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.naips-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.naips-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(30,45,69,0.7)}
+.naips-row:last-child{border-bottom:none;padding-bottom:0}
+.naips-label{font-size:10px;color:var(--label);font-family:var(--font-mono);letter-spacing:0.5px;width:150px;flex-shrink:0;padding-top:3px;text-transform:uppercase;line-height:1.5}
+.naips-val{font-family:var(--font-mono);font-size:13px;color:#e0f0ff;flex:1;line-height:1.7;white-space:pre-wrap}
+.naips-copy{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--muted);font-size:10px;font-family:var(--font-mono);padding:4px 10px;border-radius:5px;cursor:pointer;flex-shrink:0;transition:all 0.15s;white-space:nowrap;align-self:flex-start;margin-top:1px}
+.naips-copy:hover{border-color:var(--accent);color:var(--accent)}
+.naips-note{font-size:10px;color:var(--muted);font-family:var(--font-mono);font-style:italic;flex:1;padding-top:3px;line-height:1.6}
+
+.error-msg{background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.25);color:var(--red);font-size:12px;font-family:var(--font-mono);padding:11px 15px;border-radius:8px;display:none}
+.tz-info{font-size:10px;color:var(--muted);font-family:var(--font-mono);text-align:right;margin-bottom:10px}
+
+.leaflet-control-zoom a{background:rgba(15,21,32,0.88)!important;color:var(--text)!important;border-color:rgba(255,255,255,0.2)!important}
+.leaflet-control-attribution{background:rgba(10,14,20,0.6)!important;color:#777!important;font-size:9px!important}
+.leaflet-control-attribution a{color:#777!important}
+.leaflet-popup-content-wrapper{background:#111c2e;border:1px solid var(--border);color:var(--text);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.6)}
+.leaflet-popup-content{font-family:var(--font-mono);font-size:12px;line-height:1.6;color:var(--text)}
+.leaflet-popup-content strong{color:#fff}
+.leaflet-popup-tip{background:#111c2e}
+
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+@media(max-width:880px){
+  .body-grid{grid-template-columns:1fr}
+  .grid-2,.grid-3,.coords-row{grid-template-columns:1fr}
+  .aero-card{flex-wrap:wrap}
+  .map-hint{flex-direction:column;align-items:flex-start}
+  .map-search-wrap{width:100%}
+  .naips-label{width:110px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="logo">✈</div>
+    <div class="header-text">
+      <h1>NOTAM Creator</h1>
+      <p>NAIPS-ready UA operations notice generator</p>
+    </div>
+    <div class="header-right">
+      <span class="badge">UAS / RPT</span>
+      <button class="btn-fs" id="fsBtn" onclick="toggleFS()">
+        <svg id="fsIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+        <span id="fsLabel">Full screen</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="section" style="margin-bottom:1rem">
+    <div class="section-title">Operation Area — Drop a Pin</div>
+    <div class="map-hint">
+      <div class="map-hint-left">
+        <span>📍 Click the map to set your operating area. Drag the pin to refine.</span>
+        <button class="btn-airspace" id="airspaceBtn" onclick="toggleAirspace()">🗺 Airspace overlay</button>
+      </div>
+      <div class="map-search-wrap">
+        <input type="text" id="mapSearch" placeholder="Search place or address…" autocomplete="off" onkeydown="if(event.key==='Enter')doMapSearch()"/>
+        <button class="map-search-btn" onclick="doMapSearch()" title="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <div class="map-search-results" id="searchResults"></div>
+      </div>
+    </div>
+
+    <div class="airspace-legend" id="airspaceLegend">
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(0,214,143,0.5);border-color:#00d68f"></div>Aerodrome</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(0,180,216,0.2);border-color:#00b4d8"></div>CTR / Control Zone</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(255,77,109,0.2);border-color:#ff4d6d"></div>Restricted</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(240,165,0,0.2);border-color:#f0a500"></div>Danger</div>
+      <div class="legend-item"><div class="legend-dot" style="background:rgba(180,0,0,0.25);border-color:#cc0000"></div>Prohibited</div>
+      <div class="legend-item" style="margin-left:auto"><span style="color:var(--muted)">Data: OpenStreetMap · click features for info</span></div>
+    </div>
+
+    <div id="map"></div>
+    <div class="aero-loading" id="aeroLoading">
+      <span style="animation:spin 1s linear infinite;display:inline-block">⟳</span>
+      Locating nearest aerodrome…
+    </div>
+    <div class="aero-card" id="aeroCard">
+      <div class="aero-icon">🛩</div>
+      <div class="aero-info">
+        <div class="aero-name" id="aeroName">—</div>
+        <div class="aero-meta" id="aeroMeta">—</div>
+      </div>
+      <div class="aero-right">
+        <div class="aero-icao" id="aeroIcao">—</div>
+        <div class="aero-dist" id="aeroDist">—</div>
+        <button class="use-aero-btn" onclick="applyAerodrome()">Use This Location</button>
+      </div>
+    </div>
+
+    <div class="radius-control">
+      <div class="radius-header">
+        <span class="radius-label">Operation Radius</span>
+        <span class="radius-value" id="radiusDisplay">1,270 m</span>
+      </div>
+      <input type="range" class="radius-slider" id="radiusSlider" min="100" max="10000" step="10" value="1270"/>
+      <div class="radius-presets">
+        <button class="radius-preset" onclick="setRadius(500)">500 m</button>
+        <button class="radius-preset" onclick="setRadius(1000)">1 km</button>
+        <button class="radius-preset" onclick="setRadius(1852)">1 NM</button>
+        <button class="radius-preset" onclick="setRadius(3000)">3 km</button>
+        <button class="radius-preset" onclick="setRadius(5000)">5 km</button>
+        <button class="radius-preset" onclick="setRadius(10000)">10 km</button>
+      </div>
+      <input type="hidden" id="radius" value="1270"/>
+    </div>
+
+    <div class="coords-row" style="margin-top:12px">
+      <div class="coord-pill"><span>LATITUDE (DMS)</span><strong id="dispLat">— tap map to set —</strong></div>
+      <div class="coord-pill"><span>LONGITUDE (DMS)</span><strong id="dispLon">— tap map to set —</strong></div>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="field">
+        <label>LOCATION NAME</label>
+        <input type="text" id="locName" placeholder="e.g. Oxley Creek Commons"/>
+      </div>
+      <div class="field">
+        <label>LATITUDE DMS — auto</label>
+        <input type="text" id="latD" readonly placeholder="Drop a pin"/>
+      </div>
+      <div class="field">
+        <label>LONGITUDE DMS — auto</label>
+        <input type="text" id="lonD" readonly placeholder="Drop a pin"/>
+      </div>
+    </div>
+  </div>
+
+  <div class="body-grid">
+    <div class="col-left">
+      <div class="section">
+        <div class="section-title">Schedule — Local to UTC</div>
+        <p class="tz-info" id="tzInfo">Detecting timezone…</p>
+        <div class="grid-2" style="margin-bottom:12px">
+          <div class="field">
+            <label>START DATE (LOCAL)</label>
+            <div class="date-input-wrap">
+              <div class="date-display" id="startDateDisplay" onclick="toggleCal('start')">
+                <span class="date-val" id="startDateVal">Select date…</span>
+                <span class="cal-icon">📅</span>
+              </div>
+              <div class="cal-popup" id="startCal"></div>
+            </div>
+            <input type="hidden" id="startDate"/>
+            <div class="utc-row"><span class="utc-label">UTC</span><span class="utc-badge" id="startDateUtc">—</span></div>
+          </div>
+          <div class="field">
+            <label>END DATE (LOCAL)</label>
+            <div class="date-input-wrap">
+              <div class="date-display" id="endDateDisplay" onclick="toggleCal('end')">
+                <span class="date-val" id="endDateVal">Select date…</span>
+                <span class="cal-icon">📅</span>
+              </div>
+              <div class="cal-popup" id="endCal"></div>
+            </div>
+            <input type="hidden" id="endDate"/>
+            <div class="utc-row"><span class="utc-label">UTC</span><span class="utc-badge" id="endDateUtc">—</span></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>START TIME — 24h LOCAL</label>
+            <div class="time-input-wrap">
+              <div class="time-input-inner">
+                <input class="time-seg" id="startHH" maxlength="2" placeholder="HH" inputmode="numeric"/>
+                <span class="time-sep">:</span>
+                <input class="time-seg" id="startMM" maxlength="2" placeholder="MM" inputmode="numeric"/>
+                <span class="time-suffix">LOCAL</span>
+              </div>
+            </div>
+            <div class="utc-row"><span class="utc-label">UTC</span><span class="utc-badge" id="startTimeUtc">—</span></div>
+          </div>
+          <div class="field">
+            <label>END TIME — 24h LOCAL</label>
+            <div class="time-input-wrap">
+              <div class="time-input-inner">
+                <input class="time-seg" id="endHH" maxlength="2" placeholder="HH" inputmode="numeric"/>
+                <span class="time-sep">:</span>
+                <input class="time-seg" id="endMM" maxlength="2" placeholder="MM" inputmode="numeric"/>
+                <span class="time-suffix">LOCAL</span>
+              </div>
+            </div>
+            <div class="utc-row"><span class="utc-label">UTC</span><span class="utc-badge" id="endTimeUtc">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="section">
+        <div class="section-title">Aircraft &amp; Operation</div>
+        <div class="field">
+          <label>MTOW (kg)</label>
+          <input type="number" id="mtow" placeholder="e.g. 7.5" min="0.1" step="0.1"/>
+          <span class="hint">Actual MTOW — shown in NOTAM as entered (e.g. 7.5KG)</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Distance &amp; Bearing from ARP</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>DISTANCE FROM ARP (m) — auto</label>
+            <input type="number" id="arpDist" placeholder="Auto-filled from map" style="color:var(--green)"/>
+          </div>
+          <div class="field">
+            <label>BEARING FROM ARP (°MAG) — auto</label>
+            <input type="number" id="arpBrg" placeholder="Auto-filled from map" style="color:var(--green)"/>
+            <span class="hint" id="magVarHint">Magnetic variation applied when aerodrome is selected</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Altitude</div>
+        <div class="field">
+          <label>MAX ALTITUDE (metres AGL)</label>
+          <input type="number" id="altAgl" placeholder="e.g. 30" min="1"/>
+          <span class="hint">Entered in metres — auto-converted to feet in NOTAM output</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Communications</div>
+        <div class="grid-2" style="margin-bottom:12px">
+          <div class="field">
+            <label>AERODROME ICAO — auto or manual</label>
+            <input type="text" id="aeroDesig" placeholder="YBAF" style="text-transform:uppercase"/>
+          </div>
+          <div class="field">
+            <label>ATC UNIT</label>
+            <input type="text" id="atcUnit" placeholder="TWR"/>
+            <span class="hint">TWR / APP / CTAF / GND</span>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>AIRBAND FREQUENCY (MHz)</label>
+          <input type="text" id="freq" placeholder="Select aerodrome or type frequency"/>
+          <div class="hint" id="freqHint">Apply an aerodrome above to load its frequencies, or select manually:</div>
+          <div class="freq-suggest" id="freqSuggest"></div>
+        </div>
+        <div class="field">
+          <label>OPERATOR CONTACT (TEL)</label>
+          <input type="tel" id="opTel" placeholder="0400 123 456"/>
+        </div>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+      <button class="btn-generate" onclick="generateNOTAM()">Generate NAIPS NOTAM ↗</button>
+
+      <div class="output-section" id="outputSection">
+        <div class="output-header">
+          <span class="output-title">✓ NOTAM Text</span>
+          <button class="copy-btn" onclick="copyNOTAM()">Copy to clipboard</button>
+        </div>
+        <div class="notam-text" id="notamOutput"></div>
+      </div>
+
+      <div class="naips-section" id="naipsSection">
+        <div class="naips-title">✈ NAIPS Portal Fields</div>
+        <div id="naipsRows"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── TIMEZONE ─────────────────────────────────────────────────────
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.getElementById('tzInfo').textContent = 'Local timezone: ' + tz;
+
+// ── FULLSCREEN ───────────────────────────────────────────────────
+function toggleFS() {
+  const lbl = document.getElementById('fsLabel'), ico = document.getElementById('fsIcon');
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().then(() => {
+      document.body.classList.add('fs-mode');
+      lbl.textContent = 'Exit full screen';
+      ico.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
+      setTimeout(() => map.invalidateSize(), 250);
+    }).catch(() => {});
+  } else {
+    document.exitFullscreen().then(() => {
+      document.body.classList.remove('fs-mode');
+      lbl.textContent = 'Full screen';
+      ico.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+      setTimeout(() => map.invalidateSize(), 250);
+    }).catch(() => {});
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    document.body.classList.remove('fs-mode');
+    document.getElementById('fsLabel').textContent = 'Full screen';
+    document.getElementById('fsIcon').innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+    setTimeout(() => map.invalidateSize(), 250);
+  }
+});
+
+// ── MAP ──────────────────────────────────────────────────────────
+let map, marker, opCircle, arpMarker, arpLine;
+let pinLat = null, pinLon = null, foundAero = null, aeroTimer = null;
+
+map = L.map('map', { center: [-27.47, 153.02], zoom: 11 });
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Imagery © Esri, Maxar, Earthstar Geographics', maxZoom: 19 }).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  { attribution: '', maxZoom: 19, opacity: 1 }).addTo(map);
+
+const pinIcon = L.divIcon({
+  html: `<div style="width:24px;height:24px;background:#00b4d8;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 3px 12px rgba(0,0,0,0.6)"></div>`,
+  iconSize:[24,24], iconAnchor:[12,24], className:''
+});
+const arpIcon = L.divIcon({
+  html:`<div style="width:14px;height:14px;background:#f0a500;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5)"></div>`,
+  iconSize:[14,14], iconAnchor:[7,7], className:''
+});
+
+map.on('click', e => placePin(e.latlng.lat, e.latlng.lng));
+
+function placePin(lat, lon) {
+  pinLat = lat; pinLon = lon;
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat,lon], {icon:pinIcon, draggable:true}).addTo(map);
+  marker.on('drag', e => { const l=e.target.getLatLng(); updateCoords(l.lat,l.lng); drawOpCircle(l.lat,l.lng); });
+  marker.on('dragend', e => { const l=e.target.getLatLng(); pinLat=l.lat; pinLon=l.lng; scheduleAeroSearch(l.lat,l.lng); });
+  updateCoords(lat,lon); drawOpCircle(lat,lon); scheduleAeroSearch(lat,lon);
+}
+
+function drawOpCircle(lat,lon) {
+  if (opCircle) map.removeLayer(opCircle);
+  const r = parseInt(document.getElementById('radius').value)||0;
+  if (r>0) opCircle = L.circle([lat,lon],{radius:r,color:'#00b4d8',fillColor:'#00b4d8',fillOpacity:0.1,weight:2,dashArray:'6,5'}).addTo(map);
+}
+function setRadius(m) {
+  const slider = document.getElementById('radiusSlider');
+  slider.value = Math.min(Math.max(m, 100), 10000);
+  syncRadius();
+}
+function syncRadius() {
+  const slider = document.getElementById('radiusSlider');
+  const m = parseInt(slider.value);
+  document.getElementById('radius').value = m;
+  document.getElementById('radiusDisplay').textContent = m >= 1000
+    ? (m/1000).toLocaleString(undefined,{maximumFractionDigits:1})+' km'
+    : m.toLocaleString()+' m';
+  const pct = ((m - 100) / (10000 - 100) * 100).toFixed(1) + '%';
+  slider.style.setProperty('--pct', pct);
+  document.querySelectorAll('.radius-preset').forEach(b => {
+    const v = parseInt(b.getAttribute('onclick').match(/\d+/)[0]);
+    b.classList.toggle('active', v === m);
+  });
+  if (pinLat !== null) drawOpCircle(pinLat, pinLon);
+}
+document.getElementById('radiusSlider').addEventListener('input', syncRadius);
+syncRadius();
+
+function toDMS(deg,isLat) {
+  const abs=Math.abs(deg), d=Math.floor(abs);
+  const mF=(abs-d)*60, m=Math.floor(mF), s=Math.round((mF-m)*60);
+  const dir=isLat?(deg>=0?'N':'S'):(deg>=0?'E':'W');
+  return `${d}°${String(m).padStart(2,'0')}'${String(s).padStart(2,'0')}"${dir}`;
+}
+function updateCoords(lat,lon) {
+  const ld=toDMS(lat,true), ln=toDMS(lon,false);
+  document.getElementById('latD').value=ld;
+  document.getElementById('lonD').value=ln;
+  document.getElementById('dispLat').textContent=ld;
+  document.getElementById('dispLon').textContent=ln;
+}
+
+// ── MAGNETIC VARIATION ───────────────────────────────────────────
+// East variation (positive) — Magnetic = True − Variation (Variation East, Magnetic Least)
+// Values approximate for 2026; verify against current ERSA FAC for each aerodrome
+const AERO_MAG_VAR = {
+  // QLD
+  'YBBN':11,'YBAF':11,'YBCG':11,'YBSU':11,'YBTL':10,'YBCS':9,'YBNA':11,'YBUD':10,
+  'YBRK':10,'YBMK':9,'YBPN':9,'YBHM':9,'YTNG':10,'YBCK':9,'YBOU':8,'YBKE':9,
+  'YCCY':8,'YCMU':8,'YBAR':9,'YROM':10,'YBCV':9,'YCCA':10,'YKRY':10,'YGLA':11,
+  'YLRE':9,'YMOR':11,'YNBR':11,'YCNM':10,'YLRD':10,'YBOK':10,'YSHK':1,
+  'YKOW':9,'YGTE':9,'YBWP':9,'YHID':9,'YCKN':9,'YTIB':8,'YWDH':8,'YNTN':9,
+  'YGDH':11,'YBWW':10,'YDMG':9,'YJLC':8,'YKMB':9,'YBKT':9,'YAUR':9,
+  'YMYB':11,'YSPT':11,'YRBB':11,'YGYM':11,'YCAB':11,'YNSH':11,'YWCK':11,'YSPE':11,
+  'YMLS':10,'YGDI':10,'YHBA':11,'YLIS':11,'YCAS':11,'YCFS':12,'YTRE':11,
+  'YGFN':11,'YEVD':11,'YGKL':10,'YRMD':9,'YCOE':9,'YLHR':9,
+  // NSW
+  'YSSY':13,'YSBK':13,'YSCB':13,'YSCN':12,'YSWG':12,'YSTW':12,'YBTH':12,'YARM':12,
+  'YORG':12,'YMDG':12,'YMER':13,'YMAY':12,'YPKS':12,'YTEM':12,'YCWR':12,
+  'YGLB':12,'YFBS':12,'YNBR':12,'YBHI':9,'YCBB':12,'YWWL':12,'YSNW':13,'YIVL':12,
+  'YSDU':12,'YCBA':11,'YMRY':13,'YGTH':11,'YCTM':12,'YCOM':12,'YCDO':12,'YNYN':11,
+  'YGLI':12,'YNAR':12,'YCRG':13,'YWLG':11,'YSCO':12,'YMND':13,'YCCE':13,
+  'YTFD':11,'YWVA':13,'YWND':11,'YBMI':11,'YCBR':11,'YJER':12,'YTOC':12,
+  'YPMQ':12,'YKMP':12,'YOAM':13,'YSGE':10,'YWLM':13,'YBKE':9,'YBDV':4,
+  'YTMU':12,'YDLQ':12,'YORM':12,'YWWL':12,'YCNM':10,
+  // VIC
+  'YMML':12,'YMMB':12,'YMEN':12,'YMAV':12,'YLTV':13,'YSHT':12,'YSWH':11,'YMIA':11,
+  'YWGT':12,'YBLA':12,'YARA':12,'YHML':12,'YHPN':12,'YSWL':12,'YKER':12,
+  'YWKB':12,'YTMU':12,'YMBT':13,'YPOK':13,'YWSL':13,'YBNS':13,'YCBG':12,
+  'YWBL':12,'YMCO':13,'YHSM':12,'YTYA':13,'YLIL':13,'YBDG':12,'YSMI':14,
+  'YMTG':13,'YBSS':12,'YHOT':13,'YORF':13,'YDGR':13,'YCRG':13,
+  // SA
+  'YPAD':1,'YPPF':1,'YPAG':1,'YPIR':1,'YPLC':2,'YCDU':3,'YCBP':4,'YKSC':10,
+  'YLEC':3,'YCEE':3,'YABA':4,'YMRE':4,'YWHA':4,'YWMC':5,'YOLD':5,'YREN':8,
+  'YPMH':5,'YKBY':4,'YGWA':9,'YJST':4,'YHAW':4,'YALD':1,'YPWR':2,'YPED':1,
+  // WA
+  'YPPH':2,'YPJT':2,'YBLN':2,'YPKG':2,'YESP':4,'YGEL':2,
+  'YPLM':2,'YPBO':2,'YPKA':2,'YPPD':2,'YBRM':2,'YPKU':3,'YMNE':2,'YLEO':3,
+  'YNWN':2,'YFRT':3,'YCIN':3,'YHLC':3,'YNKA':3,'YDBY':2,'YARG':3,
+  'YTEF':4,'YLTN':4,'YWRC':3,'YSEN':2,'YBGD':2,'YANG':2,'YFDF':2,
+  'YGIA':2,'YSOL':2,'YDGU':3,'YMOG':2,'YLST':3,'YWLU':3,'YABA':4,
+  'YMEK':3,'YRTI':2,'YKAL':3,'YWBR':3,'YCHK':2,'YORA':3,'YWRC':3,
+  // NT
+  'YPDN':4,'YPTN':4,'YBAS':4,'YAYE':4,'YTNK':4,'YMGD':4,'YELD':5,
+  'YPGV':5,'YNGU':5,'YJAB':5,'YCKI':4,'YGBI':4,'YDLV':4,'YBCR':4,
+  'YAMB':11,'YCOO':5,'YBTI':5,'YSNB':5,'YGPT':5,'YNUM':5,'YOEN':5,
+  'YYND':4,'YBRL':5,'YMGB':5,'YIKY':4,'YRBR':5,'YRCS':5,
+  // TAS
+  'YMHB':13,'YMLT':13,'YDPO':13,'YWYY':13,'YFLI':13,'YSRN':13,'YIKN':13,
+  'YCBG':13,'YSMI':14,
+  // Remote/misc
+  'YBDV':4,'YCMU':8,'YLRE':9,'YTIB':8,'YWDH':8,'YBOU':8,
+  'YBMA':5,'YBCS':9,'YBTL':10,'YBWP':9,'YMBA':9,'YCMT':9,
+  'YBCK':9,'YBCV':9,'YTGM':9,'YNTN':9,'YKMB':9,'YBKT':9,
+  'YDKI':9,'YDMG':9,'YJLC':8,'YCMW':8,'YBIE':8,'YMTI':9,
+  'YBAU':9,'YKUB':9,'YDNI':9,'YPAM':9,'YNPE':9,'YMAE':9,
+  'YWBS':9,'YYMI':9,'YYKI':9,'YBOI':9,'YKOW':9,'YAUR':9,
+  'YGTE':9,'YHID':9,'YLHR':9,'YRED':11,'YCDR':11,'YNSH':11,
+  'YMYB':11,'YCCA':10,'YBMI':11,'YWND':11,'YCHB':11,'YBMU':9,
+  'YSHK':1,'YCAR':2,'YGEL':2,'YPLM':2,'YCAR':2,'YWHA':4,
+  'YBMK':9,'YBHM':9,'YBPN':9,'YBCK':9,'YTNG':10,'YBCG':11,
+  'YSPT':11,'YRBB':11,'YGYM':11,'YCAB':11,'YWCK':11,'YSPE':11,
+  'YMLS':10,'YGDI':10,'YHBA':11,'YCAS':11,'YTRE':11,'YEVD':11,
+  'YOLD':5,'YOMO':8,'YBNS':13,'YLHI':13,'YRTI':2,
+};
+
+function estimateMagVar(lon) {
+  if (lon < 120) return 1;
+  if (lon < 125) return 2;
+  if (lon < 130) return 3;
+  if (lon < 135) return 5;
+  if (lon < 140) return 7;
+  if (lon < 145) return 9;
+  if (lon < 150) return 11;
+  return 12;
+}
+
+function truToMag(trueBrg, magVar) {
+  return Math.round(((trueBrg - magVar) + 360) % 360);
+}
+
+// ── AERODROME LOOKUP ─────────────────────────────────────────────
+// Source: OurAirports.com public domain data (290 aerodromes)
+const AU_AERODROMES = [
+  // Large airports
+  ['YSSY','Sydney Kingsford Smith International Airport',-33.946098,151.177002],
+  ['YMML','Melbourne Airport',-37.670732,144.837898],
+  ['YBBN','Brisbane International Airport',-27.384199,153.117004],
+  ['YPPH','Perth International Airport',-31.940300,115.967003],
+  ['YBCS','Cairns International Airport',-16.878921,145.749480],
+  ['YPAD','Adelaide International Airport',-34.947512,138.533393],
+  ['YPDN','Darwin International Airport',-12.414970,130.881850],
+  ['YBCG','Gold Coast Airport',-28.165962,153.506641],
+  ['YSCB','Canberra Airport',-35.306900,149.195007],
+  ['YMHB','Hobart International Airport',-42.837032,147.513022],
+  ['YBAS','Alice Springs Airport',-23.806588,133.903427],
+  ['YMLT','Launceston Airport',-41.544935,147.210785],
+  ['YAYE','Ayers Rock Connellan Airport',-25.185913,130.977030],
+  ['YBTL','Townsville Airport',-19.252904,146.766512],
+  ['YBSU','Sunshine Coast Airport',-26.593324,153.083190],
+  ['YMAV','Melbourne Avalon International Airport',-38.040269,144.467196],
+  ['YBRM','Broome International Airport',-17.949194,122.228300],
+  ['YWLM','Newcastle Airport',-32.796114,151.835025],
+  ['YPPD','Port Hedland International Airport',-20.382787,118.629789],
+  ['YBWW','Toowoomba Wellcamp Airport',-27.558332,151.793335],
+  // Medium airports
+  ['YSBK','Sydney Bankstown Airport',-33.923618,150.990792],
+  ['YMMB','Melbourne Moorabbin Airport',-37.977765,145.099799],
+  ['YBHM','Hamilton Island Airport',-20.358101,148.951996],
+  ['YBRK','Rockhampton Airport',-23.380019,150.475359],
+  ['YBAF','Brisbane Archerfield Airport',-27.572351,153.004167],
+  ['YMEN','Melbourne Essendon Airport',-37.728100,144.901993],
+  ['YPJT','Perth Jandakot Airport',-32.097500,115.880997],
+  ['YCFS','Coffs Harbour Airport',-30.320601,153.115997],
+  ['YPPF','Adelaide Parafield Airport',-34.793301,138.632996],
+  ['YBNA','Ballina Byron Gateway Airport',-28.833236,153.561471],
+  ['YBUD','Bundaberg Airport',-24.905039,152.322612],
+  ['YMIA','Mildura Airport',-34.229198,142.085999],
+  ['YSCN','Camden Airport',-34.038338,150.686406],
+  ['YKSC','Kingscote Airport',-35.713902,137.520996],
+  ['YPKG','Kalgoorlie Boulder Airport',-30.791543,121.464586],
+  ['YSTW','Tamworth Airport',-31.077898,150.845484],
+  ['YBHI','Broken Hill Airport',-32.001400,141.472000],
+  ['YSWG','Wagga Wagga Airport',-35.163484,147.468320],
+  ['YBMK','Mackay Airport',-21.170816,149.182588],
+  ['YBTH','Bathurst Airport',-33.406817,149.651161],
+  ['YMER','Merimbula Airport',-36.908600,149.901001],
+  ['YSHT','Shepparton Airport',-36.428341,145.391473],
+  ['YSWH','Swan Hill Airport',-35.375801,143.533005],
+  ['YLTV','Latrobe Valley Airport',-38.211004,146.470817],
+  ['YBDV','Birdsville Airport',-25.897499,139.348007],
+  ['YPAG','Port Augusta Airport',-32.506901,137.716995],
+  ['YABA','Albany Airport',-34.943333,117.808889],
+  ['YGEL','Geraldton Airport',-28.796101,114.707001],
+  ['YBMA','Mount Isa Airport',-20.666380,139.488468],
+  ['YMDG','Mudgee Airport',-32.564794,149.609452],
+  ['YORG','Orange Airport',-33.382014,149.131262],
+  ['YARM','Armidale Airport',-30.528099,151.617004],
+  ['YDPO','Devonport Airport',-41.169701,146.429993],
+  ['YMAY','Albury Airport',-36.066758,146.959148],
+  ['YHBA','Hervey Bay Airport',-25.320127,152.880662],
+  ['YPKA','Karratha Airport',-20.712200,116.773003],
+  ['YPKU','Kununurra Airport',-15.778100,128.707993],
+  ['YLIS','Lismore Airport',-28.830689,153.258419],
+  ['YPKS','Parkes Airport',-33.131401,148.238998],
+  ['YBPN','Proserpine Whitsunday Coast Airport',-20.494416,148.553583],
+  ['YPTN','Tindal Airport',-14.521100,132.378006],
+  ['YWGT','Wangaratta Airport',-36.417914,146.306896],
+  ['YWYY','Wynyard Airport',-40.997039,145.726000],
+  ['YCBP','Coober Pedy Airport',-29.038312,134.722166],
+  ['YPLM','Learmonth Airport',-22.235201,114.090024],
+  ['YGTH','Griffith Airport',-34.250801,146.067001],
+  ['YROM','Roma Airport',-26.545000,148.774994],
+  ['YAMB','RAAF Base Amberley',-27.635381,152.711223],
+  ['YSRI','RAAF Base Richmond',-33.604652,150.783051],
+  ['YWTN','Winton Airport',-22.363600,143.085999],
+  ['YESP','Esperance Airport',-33.684399,121.822998],
+  ['YGLA','Gladstone Airport',-23.869763,151.225439],
+  ['YHID','Horn Island Airport',-10.585636,142.292770],
+  ['YPGV','Gove Airport',-12.269400,136.817993],
+  ['YPBO','Paraburdoo Airport',-23.171101,117.745003],
+  ['YPMQ','Port Macquarie Airport',-31.435801,152.863007],
+  ['YBWP','Weipa Airport',-12.677493,141.922618],
+  ['YWHA','Whyalla Airport',-33.058899,137.514008],
+  ['YCWR','Cowra Airport',-33.846894,148.648007],
+  ['YGLB','Goulburn Airport',-34.810299,149.725998],
+  ['YFBS','Forbes Airport',-33.363602,147.934998],
+  ['YTEM','Temora Airport',-34.421398,147.511993],
+  ['YBKE','Bourke Airport',-30.039200,145.951996],
+  ['YCBA','Cobar Airport',-31.538300,145.794006],
+  ['YBIE','Bedourie Airport',-24.346100,139.460007],
+  ['YCCY','Cloncurry Airport',-20.668600,140.503998],
+  ['YCOE','Coen Airport',-13.761133,143.113311],
+  ['YCOM','Cooma Snowy Mountains Airport',-36.300445,148.972408],
+  ['YELD','Elcho Island Airport',-12.019400,135.570999],
+  ['YLHR','Lockhart River Airport',-12.786900,143.304993],
+  ['YMGD','Maningrida Airport',-12.056100,134.233994],
+  ['YPLC','Port Lincoln Airport',-34.605301,135.880005],
+  ['YTNK','Tennant Creek Airport',-19.634399,134.182999],
+  ['YHML','Hamilton Airport',-37.648899,142.065002],
+  ['YFRT','Forrest Airport',-30.836620,128.112811],
+  ['YLEC','Leigh Creek Airport',-30.598301,138.425995],
+  ['YPIR','Port Pirie Airport',-33.238899,137.994995],
+  ['YCTM','Cootamundra Airport',-34.624283,148.036641],
+  ['YKMP','Kempsey Airport',-31.072320,152.765313],
+  ['YBLA','Benalla Airport',-36.551899,146.007004],
+  ['YCNM','Coonamble Airport',-30.980946,148.377833],
+  ['YLRD','Lightning Ridge Airport',-29.452857,147.977146],
+  ['YBOK','Oakey Army Aviation Centre',-27.409262,151.736727],
+  ['YBOU','Boulia Airport',-22.913300,139.899994],
+  ['YCMU','Cunnamulla Airport',-28.030001,145.621994],
+  ['YBAR','Barcaldine Airport',-23.566268,145.302086],
+  ['YTNG','Thangool Airport',-24.494863,150.577967],
+  ['YSHK','Shark Bay Airport',-25.897294,113.575802],
+  ['YKOW','Kowanyama Airport',-15.485369,141.752572],
+  ['YLEO','Leonora Airport',-28.878099,121.315002],
+  ['YHOT','Mount Hotham Airport',-37.047501,147.333999],
+  ['YWLG','Walgett Airport',-30.032801,148.126007],
+  ['YCRG','Corryong Airport',-36.182800,147.888000],
+  ['YHPN','Hopetoun Airport',-35.715302,142.360001],
+  ['YSWL','Stawell Airport',-37.071701,142.740997],
+  ['YCBB','Coonabarabran Airport',-31.332500,149.266998],
+  ['YMRE','Marree Airport',-29.663300,138.065002],
+  ['YKRY','Kingaroy Airport',-26.581077,151.839927],
+  ['YARA','Ararat Airport',-37.309978,142.988688],
+  ['YDBY','Derby Airport',-17.371930,123.662210],
+  ['YGLI','Glen Innes Airport',-29.676029,151.691156],
+  ['YMBA','Mareeba Airport',-17.070277,145.424228],
+  ['YSNW','HMAS Albatross Nowra',-34.946600,150.542451],
+  ['YWWL','West Wyalong Airport',-33.937199,147.190994],
+  ['YBTI','Bathurst Island Airport',-11.764966,130.615774],
+  ['YHLC','Halls Creek Airport',-18.233900,127.669998],
+  ['YMNE','Mount Keith Airport',-27.287330,120.554937],
+  ['YCMT','Clermont Airport',-22.773100,147.621002],
+  ['YCEE','Cleve Airport',-33.709702,136.505005],
+  ['YBRN','Balranald Airport',-34.624834,143.577114],
+  ['YYNG','Young Airport',-34.255576,148.247118],
+  ['YCCA','Chinchilla Airport',-26.771947,150.617571],
+  ['YTMU','Tumut Aerodrome',-35.268320,148.240526],
+  ['YNWN','Newman Airport',-23.417801,119.803001],
+  ['YWDH','Windorah Airport',-25.410641,142.668428],
+  ['YTRE','Taree Airport',-31.888599,152.514008],
+  ['YHAY','Hay Airport',-34.531399,144.830002],
+  ['YTIB','Tibooburra Airport',-29.451099,142.057999],
+  ['YHSM','Horsham Airport',-36.669701,142.173004],
+  ['YTEF','Telfer Airport',-21.715000,122.228996],
+  ['YPED','RAAF Base Edinburgh',-34.705705,138.615564],
+  ['YDLQ','Deniliquin Airport',-35.559399,144.945999],
+  ['YCIN','RAAF Base Curtin',-17.581389,123.828333],
+  ['YGFN','Clarence Valley Regional Airport',-29.754795,153.031234],
+  ['YIVL','Inverell Airport',-29.888300,151.143997],
+  ['YNGU','Ngukurr Airport',-14.722800,134.746994],
+  ['YMTG','Mount Gambier Airport',-37.744382,140.780561],
+  ['YSMI','Smithton Airport',-40.835000,145.083999],
+  ['YKER','Kerang Airport',-35.751400,143.938995],
+  ['YWKB','Warracknabeal Airport',-36.321098,142.419006],
+  ['YWLU','Wiluna Airport',-26.629200,120.221001],
+  ['YQLP','Quilpie Airport',-26.609176,144.253746],
+  ['YEML','Emerald Airport',-23.567499,148.179001],
+  ['YNAR','Narrandera Airport',-34.702202,146.511993],
+  ['YTGM','Thargomindah Airport',-27.986368,143.812065],
+  ['YFTZ','Fitzroy Crossing Airport',-18.183596,125.559783],
+  ['YNTN','Normanton Airport',-17.684090,141.069664],
+  ['YGDH','Gunnedah Airport',-30.957511,150.248981],
+  ['YRMD','Richmond Airport QLD',-20.701900,143.115005],
+  ['YSGE','St George Airport',-28.049700,148.595001],
+  ['YBCK','Blackall Airport',-24.431678,145.429716],
+  ['YCDU','Ceduna Airport',-32.130600,133.710007],
+  ['YCAR','Carnarvon Airport',-24.884337,113.666393],
+  ['YBCV','Charleville Airport',-26.413300,146.261993],
+  ['YSDU','Dubbo City Regional Airport',-32.216702,148.574997],
+  ['YGTE','Groote Eylandt Airport',-13.972405,136.458553],
+  ['YLRE','Longreach Airport',-23.434200,144.279999],
+  ['YMOR','Moree Airport',-29.498899,149.845001],
+  ['YMRY','Moruya Airport',-35.897800,150.143997],
+  ['YNBR','Narrabri Airport',-30.319201,149.826996],
+  ['YCBG','Cambridge Aerodrome',-42.827498,147.478337],
+  ['YBNS','Bairnsdale Airport',-37.887539,147.569379],
+  ['YWSL','West Sale Airport',-38.090827,146.965335],
+  ['YTOC','Tocumwal Airport',-35.811699,145.608002],
+  ['YNPE','Northern Peninsula Airport',-10.946194,142.455081],
+  ['YLST','Leinster Airport',-27.843300,120.703003],
+  ['YMOG','Mount Magnet Airport',-28.116100,117.842003],
+  ['YGDI','Goondiwindi Airport',-28.521400,150.320007],
+  ['YDNI','Darnley Island Airport',-9.579176,143.780276],
+  ['YPAM','Palm Island Airport',-18.755301,146.580994],
+  ['YMTI','Mornington Island Airport',-16.662500,139.177994],
+  ['YBAU','Badu Island Airport',-10.149550,142.173665],
+  ['YKUB','Kubin Island Airport',-10.226480,142.219619],
+  ['YLTN','Laverton Airport WA',-28.614267,122.428673],
+  ['YNUM','Numbulwar Airport',-14.271700,135.716995],
+  ['YOEN','Oenpelli Airport',-12.325000,133.005997],
+  ['YYND','Yuendumu Airport',-22.254200,131.781998],
+  ['YFLI','Flinders Island Airport',-40.091702,147.992996],
+  ['YPWR','Woomera Airfield',-31.144199,136.817001],
+  ['YBOI','Boigu Island Airport',-9.232780,142.218002],
+  ['YMAE','Murray Island Airport',-9.915105,144.054644],
+  ['YWBS','Warraber Island Airport',-10.208300,142.824997],
+  ['YYMI','Yam Island Airport',-9.899187,142.774265],
+  ['YYKI','Yorke Island Airport',-9.752801,143.405673],
+  ['YEVD','Evans Head Aerodrome',-29.101786,153.419255],
+  ['YJAB','Jabiru Airport',-12.658056,132.894638],
+  ['YRED','Redcliffe Airport',-27.205605,153.068712],
+  ['YOLD','Olympic Dam Airport',-30.483861,136.876699],
+  ['YRBR','Robinson River Airport',-16.718300,136.945007],
+  ['YCMW','Camooweal Airport',-19.911699,138.125000],
+  ['YBKT','Burketown Airport',-17.748600,139.533997],
+  ['YDMG','Doomadgee Airport',-17.940300,138.822006],
+  ['YJLC','Julia Creek Airport',-20.668301,141.723007],
+  ['YKMB','Karumba Airport',-17.456699,140.830002],
+  ['YAUR','Aurukun Airport',-13.354019,141.720028],
+  ['YDKI','Dunk Island Airport',-17.939130,146.141447],
+  ['YGKL','Great Keppel Island Airport',-23.184575,150.941640],
+  ['YCKI','Croker Island Airport',-11.165000,132.483002],
+  ['YDLV','Delissaville Airport',-12.550000,130.684998],
+  ['YGBI','South Goulburn Island Airport',-11.650000,133.382004],
+  ['YBRL','Borroloola Airport',-16.075300,136.302002],
+  ['YJST','Hubert Wilkins Airstrip',-33.192085,138.615532],
+  ['YHAW','Wilpena Pound Airport',-31.855907,138.468079],
+  ['YKAL','Kalumburu Airport',-14.287840,126.633182],
+  ['YARG','Argyle Airport',-16.636944,128.451389],
+  ['YPMP','Pormpuraaw Airport',-14.896451,141.609080],
+  ['YSRN','Strahan Airport',-42.154999,145.292007],
+  ['YIKN','King Island Airport',-39.877499,143.878006],
+  ['YMEK','Meekatharra Airport',-26.611700,118.547997],
+  ['YLHI','Lord Howe Island Airport',-31.538204,159.075460],
+  ['YRTI','Rottnest Island Airport',-32.006699,115.540001],
+  ['YCDR','Caloundra Airport',-26.803360,153.104975],
+  ['YBDG','Bendigo Airport',-36.739399,144.330002],
+  ['YBLN','Busselton Margaret River Airport',-33.687222,115.400278],
+  ['YMYB','Maryborough Airport QLD',-25.513528,152.713603],
+  ['YWRC','Wave Rock Airport',-32.426701,118.907997],
+  ['YNSH','Noosa Airport',-26.423177,153.064935],
+  ['YNRG','Narrogin Airport',-32.930000,117.080002],
+  ['YCAS','Casino Airport',-28.881304,153.060724],
+  ['YCDO','Condobolin Airport',-33.065650,147.213160],
+  ['YNYN','Nyngan Airport',-31.550645,147.202973],
+  ['YIKY','Katherine Gorge Airport',-14.385302,132.393150],
+  ['YOAM','The Oaks Airport',-34.084097,150.559602],
+  ['YSGR','South Grafton Airport',-29.708300,152.927994],
+  ['YSPE','Stanthorpe Airport',-28.620113,151.983281],
+  ['YWCK','Warwick Airport',-28.149401,151.942993],
+  ['YMLS','Miles Airport',-26.806447,150.168953],
+  ['YGWA','Goolwa Airport',-35.480085,138.744267],
+  ['YCBR','Collarenebri Airport',-29.523239,148.578243],
+  ['YJER','Jerilderie Airport',-35.373032,145.723152],
+  ['YWBR','Warburton Airport WA',-26.125538,126.583158],
+  ['YORA','Ora Banda Airport',-30.404200,121.066200],
+  ['YPOD','Portland Airport',-38.318100,141.470993],
+  ['YWMC','William Creek Aerodrome',-28.905854,136.340600],
+  ['YCOB','Colac Airport',-38.286701,143.679993],
+  ['YTYA','Tyabb Airport',-38.266826,145.179406],
+  ['YCAB','Caboolture Airport',-27.076027,152.987376],
+  ['YGYM','Gympie Airport',-26.290149,152.702998],
+  ['YSNB','Snake Bay Airport',-11.417674,130.648481],
+  ['YGPT','Garden Point Airport',-11.399686,130.425568],
+  ['YCOO','Cooinda Airport',-12.903300,132.531998],
+  ['YMCO','Mallacoota Airport',-37.598301,149.720001],
+  ['YSPT','Southport Airport',-27.921848,153.371469],
+  ['YKBY','Streaky Bay Airport',-32.836621,134.292991],
+  ['YHBK','Holbrook Airport',-35.680142,147.322418],
+  ['YSEN','Serpentine Airport',-32.394966,115.870987],
+  ['YLIL','Lilydale Airport',-37.693000,145.367000],
+  ['YWVA','Warnervale Airport',-33.240278,151.429722],
+  ['YWBL','Warrnambool Airport',-38.295300,142.447006],
+  ['YRBB','Rainbow Beach Airport',-25.852110,153.069248],
+  ['YCCE','Cessnock Airport',-32.787498,151.341995],
+  ['YMND','Maitland Airport',-32.701265,151.492912],
+  ['YCHK','Christmas Creek Airport',-22.354302,119.642603],
+  ['YNKA','Noonkanbah Airport',-18.494699,124.851997],
+  ['YBGD','Boolgeeda Airport',-22.541111,117.269444],
+  ['YANG','West Angelas Airport',-23.135556,118.707222],
+  ['YFDF','Fortescue Dave Forrest Aerodrome',-22.290754,119.437143],
+  ['YPMH','Prominent Hill Airport',-29.716000,135.524400],
+  ['YGIA','Ginbata Airport',-22.581200,120.035530],
+  ['YSOL','Solomon Airport',-22.256770,117.850454],
+  ['YDGU','DeGrussa Airport',-25.558384,119.287534],
+  ['YALD','Aldinga Airport',-35.288753,138.494210],
+  ['YBSS','Bacchus Marsh Airport',-37.733333,144.421667],
+  ['YMBT','Mount Beauty Airport',-36.731576,147.168903],
+  ['YPOK','Porepunkah Airport',-36.717731,146.890039],
+  ['YTFD','Tenterfield Airport',-28.991550,151.930103],
+  ['YSCO','Scone Airport',-32.038012,150.831966],
+  ['YBMI','Boomi Airport',-28.728373,149.595181],
+  ['YWND','Wondai Airport',-26.277392,151.861673],
+  ['YMBU','Maryborough Airport VIC',-37.033100,143.708999],
+  ['YMGB','Milingimbi Airport',-12.094400,134.893997],
+  ['YCHB','Cherrabah Airport',-28.430100,152.088950],
+  ['YCGO','Chillagoe Airport',-17.138386,144.528494],
+  ['YREN','Renmark Airport',-34.196400,140.673996],
+  ['YDGR','Dalgety Airport',-36.520000,148.880000],
+  ['YORF','Orbost Airport',-37.790001,148.610001],
+  ['YRCS','Roper Bar Airport',-14.735000,134.526000],
+  ['YBCR','Batchelor Airport',-13.056630,131.028804],
+  ['YOMO','Moomba Airport',-28.099400,140.197006],
+  ['YCKN','Cooktown Airport',-15.443649,145.183221],
+];
+
+function hvs(a1,o1,a2,o2){const R=6371000,r=Math.PI/180,a=Math.sin(((a2-a1)*r)/2)**2+Math.cos(a1*r)*Math.cos(a2*r)*Math.sin(((o2-o1)*r)/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+function brng(a1,o1,a2,o2){const r=Math.PI/180,d=(o2-o1)*r;return Math.round(((Math.atan2(Math.sin(d)*Math.cos(a2*r),Math.cos(a1*r)*Math.sin(a2*r)-Math.sin(a1*r)*Math.cos(a2*r)*Math.cos(d))*180/Math.PI)+360)%360);}
+
+function scheduleAeroSearch(lat,lon){clearTimeout(aeroTimer);aeroTimer=setTimeout(()=>findAero(lat,lon),700);}
+
+async function findAero(lat,lon) {
+  const loEl=document.getElementById('aeroLoading'), card=document.getElementById('aeroCard');
+  card.classList.remove('visible'); loEl.style.display='flex';
+  loEl.innerHTML='<span style="animation:spin 1s linear infinite;display:inline-block">⟳</span> Locating nearest aerodrome…';
+
+  let best=null, bestDist=Infinity;
+  for(const [icao,name,ala,alon] of AU_AERODROMES){
+    const d=hvs(lat,lon,ala,alon);
+    if(d<bestDist){bestDist=d;best={icao,name,lat:ala,lon:alon,dist:d};}
+  }
+  try {
+    const delta=1.5, bb=`${lat-delta},${lon-delta},${lat+delta},${lon+delta}`;
+    const q=`[out:json][timeout:15];(node["aeroway"="aerodrome"](${bb});way["aeroway"="aerodrome"](${bb}););out center tags;`;
+    const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+    if(res.ok){
+      const data=await res.json();
+      for(const el of (data.elements||[])){
+        const ala=el.lat??el.center?.lat, alon=el.lon??el.center?.lon;
+        if(ala==null) continue;
+        const d=hvs(lat,lon,ala,alon);
+        const icao=el.tags?.icao||el.tags?.ref||'';
+        const name=el.tags?.name||el.tags?.['name:en']||'';
+        if(icao && d<bestDist){ bestDist=d; best={icao,name,lat:ala,lon:alon,dist:d}; }
+        else if(!icao && name && d<bestDist-5000){ bestDist=d; best={icao:'',name,lat:ala,lon:alon,dist:d}; }
+      }
+    }
+  } catch(e){}
+
+  loEl.style.display='none';
+  if(!best){ loEl.style.display='flex'; loEl.innerHTML='⚠ No aerodromes found nearby.'; return; }
+
+  const distM=Math.round(best.dist);
+  const trueBrg=brng(best.lat,best.lon,lat,lon);
+  const magVar=AERO_MAG_VAR[best.icao]??estimateMagVar(best.lon);
+  const magBrg=truToMag(trueBrg,magVar);
+
+  foundAero={icao:best.icao||'—',name:best.name||'Unknown',distM,trueBrg,magBrg,magVar,lat:best.lat,lon:best.lon};
+  document.getElementById('aeroName').textContent=foundAero.name;
+  document.getElementById('aeroIcao').textContent=foundAero.icao;
+  document.getElementById('aeroMeta').textContent=
+    `${(distM/1000).toFixed(1)} km from pin  ·  Site bears ${magBrg}°MAG from ARP\n` +
+    `Magnetic variation: ${magVar}°E applied (verify in ERSA FAC)`;
+  document.getElementById('aeroDist').textContent=distM.toLocaleString()+' m';
+  document.getElementById('aeroCard').classList.add('visible');
+}
+
+function applyAerodrome() {
+  if(!foundAero)return;
+  document.getElementById('aeroDesig').value=foundAero.icao;
+  document.getElementById('arpDist').value=foundAero.distM;
+  document.getElementById('arpBrg').value=foundAero.magBrg;
+  document.getElementById('magVarHint').textContent=
+    `${foundAero.magVar}°E variation applied (True ${foundAero.trueBrg}° → MAG ${foundAero.magBrg}°) — verify in ERSA FAC`;
+  if(arpMarker)map.removeLayer(arpMarker);
+  if(arpLine)map.removeLayer(arpLine);
+  arpMarker=L.marker([foundAero.lat,foundAero.lon],{icon:arpIcon}).addTo(map)
+    .bindTooltip(`<strong>${foundAero.icao}</strong> — ${foundAero.name}`,{permanent:false,direction:'top'});
+  arpLine=L.polyline([[pinLat,pinLon],[foundAero.lat,foundAero.lon]],{color:'#f0a500',weight:1.5,dashArray:'6,5',opacity:0.7}).addTo(map);
+  map.fitBounds([[pinLat,pinLon],[foundAero.lat,foundAero.lon]],{padding:[50,50]});
+  const c=document.getElementById('aeroCard');c.classList.add('applied');setTimeout(()=>c.classList.remove('applied'),1500);
+  updateFreqChips(foundAero.icao);
+}
+
+document.getElementById('aeroDesig').addEventListener('input', function(){
+  this.value=this.value.toUpperCase();
+  updateFreqChips(this.value);
+});
+
+// ── FREQUENCY CHIPS ──────────────────────────────────────────────
+const AERO_FREQS = {
+  'YBBN':[{f:'120.5',l:'TWR'},{f:'124.7',l:'GND'},{f:'125.6',l:'APP'},{f:'126.25',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YBAF':[{f:'118.1',l:'TWR'},{f:'130.0',l:'GND'},{f:'119.1',l:'APP'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
+  'YBCG':[{f:'118.7',l:'TWR'},{f:'121.8',l:'GND'},{f:'123.75',l:'APP'},{f:'128.35',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YSSY':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'124.4',l:'APP'},{f:'126.25',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YMML':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'132.0',l:'APP'},{f:'118.0',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YPPH':[{f:'121.7',l:'TWR'},{f:'121.9',l:'GND'},{f:'123.6',l:'APP'},{f:'127.8',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YPDN':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.2',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YBCS':[{f:'124.2',l:'TWR'},{f:'121.9',l:'GND'},{f:'119.4',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YBTL':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.1',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YADL':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'118.2',l:'APP'},{f:'128.05',l:'ATIS'},{f:'121.5',l:'GUARD'}],
+  'YSCB':[{f:'118.7',l:'TWR'},{f:'121.7',l:'GND'},{f:'124.5',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YMHB':[{f:'118.1',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.55',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YBAS':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'119.3',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YBSG':[{f:'124.4',l:'TWR'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
+  'YTWB':[{f:'118.3',l:'TWR'},{f:'118.3',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBTB':[{f:'122.1',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBRK':[{f:'118.6',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBMK':[{f:'119.1',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YGLI':[{f:'118.1',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBHD':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YHBA':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBHM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YLST':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YQLP':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YROM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBWN':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBMA':[{f:'118.3',l:'TWR'},{f:'121.5',l:'GUARD'}],
+  'YBLT':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YCIN':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YBOK':[{f:'122.9',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YAMB':[{f:'120.1',l:'TWR'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
+  'YWLM':[{f:'118.3',l:'TWR'},{f:'123.3',l:'APP'},{f:'121.5',l:'GUARD'}],
+  'YCFS':[{f:'118.4',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YSTW':[{f:'118.8',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YDBI':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YPAM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YPKA':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YPKG':[{f:'118.3',l:'TWR'},{f:'121.5',l:'GUARD'}],
+  'YMBU':[{f:'118.3',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YSWG':[{f:'118.4',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YALA':[{f:'121.8',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
+  'YMAV':[{f:'120.1',l:'TWR'},{f:'121.7',l:'GND'},{f:'125.1',l:'APP'},{f:'121.5',l:'GUARD'}],
+};
+
+function updateFreqChips(icao) {
+  const container=document.getElementById('freqSuggest');
+  const hint=document.getElementById('freqHint');
+  const freqs=icao?AERO_FREQS[icao.toUpperCase()]:null;
+  if(freqs){
+    hint.textContent=`Frequencies for ${icao.toUpperCase()} — verify against current AIP ERSA:`;
+    container.innerHTML=freqs.map(({f,l})=>`<span class="freq-chip" data-freq="${f}">${f} ${l}</span>`).join('');
+  } else {
+    hint.textContent=icao?`No frequency data for ${icao.toUpperCase()} — select manually or check AIP ERSA:`:'Apply an aerodrome above to load its frequencies, or select manually:';
+    container.innerHTML=`<span class="freq-chip" data-freq="126.7">126.7 MBZ</span><span class="freq-chip" data-freq="121.5">121.5 GUARD</span><span class="freq-chip" data-freq="123.0">123.0 CTAF</span><span class="freq-chip" data-freq="122.9">122.9 CTAF</span>`;
+  }
+  container.querySelectorAll('.freq-chip').forEach(chip=>{
+    chip.addEventListener('click',()=>{
+      container.querySelectorAll('.freq-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      document.getElementById('freq').value=chip.dataset.freq;
+    });
+  });
+}
+updateFreqChips(null);
+
+// ── CALENDAR ─────────────────────────────────────────────────────
+const calState={start:{year:0,month:0,selected:null},end:{year:0,month:0,selected:null}};
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
+function initCals(){const now=new Date();['start','end'].forEach(k=>{calState[k].year=now.getFullYear();calState[k].month=now.getMonth();});renderCal('start');renderCal('end');}
+function renderCal(k){
+  const s=calState[k],el=document.getElementById(k+'Cal');
+  const today=new Date();today.setHours(0,0,0,0);
+  const startDow=new Date(s.year,s.month,1).getDay();
+  const dim=new Date(s.year,s.month+1,0).getDate();
+  let dH='';
+  for(let i=0;i<startDow;i++) dH+=`<div class="cal-day other-month disabled"></div>`;
+  for(let d=1;d<=dim;d++){
+    const dt=new Date(s.year,s.month,d);
+    const cls=['cal-day',dt.getTime()===today.getTime()?'today':'',s.selected&&dt.toDateString()===s.selected.toDateString()?'selected':''].filter(Boolean).join(' ');
+    dH+=`<div class="${cls}" onclick="selectDay('${k}',${s.year},${s.month},${d})">${d}</div>`;
+  }
+  el.innerHTML=`<div class="cal-header"><button class="cal-nav" onclick="shiftMonth('${k}',-1)">‹</button><span class="cal-month-label">${MONTHS[s.month]} ${s.year}</span><button class="cal-nav" onclick="shiftMonth('${k}',1)">›</button></div><div class="cal-dow">${DOW.map(d=>`<span>${d}</span>`).join('')}</div><div class="cal-days">${dH}</div>`;
+}
+function shiftMonth(k,dir){calState[k].month+=dir;if(calState[k].month>11){calState[k].month=0;calState[k].year++;}if(calState[k].month<0){calState[k].month=11;calState[k].year--;}renderCal(k);}
+function selectDay(k,y,m,d){
+  const dt=new Date(y,m,d);calState[k].selected=dt;
+  const iso=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  document.getElementById(k+'Date').value=iso;
+  document.getElementById(k+'DateVal').textContent=dt.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  document.getElementById(k+'DateVal').style.color='var(--text)';
+  closeCal(k);renderCal(k);updUtc();
+}
+function toggleCal(k){const p=document.getElementById(k+'Cal'),d=document.getElementById(k+'DateDisplay'),o=p.classList.contains('open');closeAllCals();if(!o){p.classList.add('open');d.classList.add('open');}}
+function closeCal(k){document.getElementById(k+'Cal').classList.remove('open');document.getElementById(k+'DateDisplay').classList.remove('open');}
+function closeAllCals(){['start','end'].forEach(closeCal);}
+document.addEventListener('click',e=>{if(!e.target.closest('.date-input-wrap'))closeAllCals();});
+initCals();
+
+// ── TIME INPUTS ──────────────────────────────────────────────────
+function setupTimeSeg(hhId,mmId){
+  const hh=document.getElementById(hhId),mm=document.getElementById(mmId);
+  function sHH(v){v=v.replace(/\D/g,'');if(v.length===1&&parseInt(v)>2)v='0'+v;if(v.length>=2){let n=parseInt(v.slice(0,2));if(n>23)n=23;v=String(n).padStart(2,'0');}return v;}
+  function sMM(v){v=v.replace(/\D/g,'');if(v.length>=2){let n=parseInt(v.slice(0,2));if(n>59)n=59;v=String(n).padStart(2,'0');}return v;}
+  hh.addEventListener('input',e=>{let v=sHH(e.target.value);e.target.value=v;if(v.length===2)mm.focus();updUtc();});
+  hh.addEventListener('blur',e=>{let v=e.target.value.replace(/\D/g,'');if(v.length===1)e.target.value='0'+v;updUtc();});
+  mm.addEventListener('input',e=>{e.target.value=sMM(e.target.value);updUtc();});
+  mm.addEventListener('blur',e=>{let v=e.target.value.replace(/\D/g,'');if(v.length===1)e.target.value='0'+v;updUtc();});
+  mm.addEventListener('keydown',e=>{if(e.key==='Backspace'&&mm.value==='')hh.focus();});
+}
+setupTimeSeg('startHH','startMM');
+setupTimeSeg('endHH','endMM');
+
+function getTimeStr(hhId,mmId){const h=document.getElementById(hhId).value.replace(/\D/g,''),m=document.getElementById(mmId).value.replace(/\D/g,'');if(h.length<1||m.length<2)return null;return`${h.padStart(2,'0')}:${m.padStart(2,'0')}`;}
+function toUtc(d,t){if(!d||!t)return null;const dt=new Date(`${d}T${t}`);return isNaN(dt)?null:dt;}
+function fmtNotam(dt){return String(dt.getUTCDate()).padStart(2,'0')+' '+String(dt.getUTCHours()).padStart(2,'0')+String(dt.getUTCMinutes()).padStart(2,'0')+'00';}
+
+// NAIPS date format: YY MM DD HHMM (UTC)
+function fmtNAIPS(dt){
+  return String(dt.getUTCFullYear()).slice(2)+' '+
+    String(dt.getUTCMonth()+1).padStart(2,'0')+' '+
+    String(dt.getUTCDate()).padStart(2,'0')+' '+
+    String(dt.getUTCHours()).padStart(2,'0')+
+    String(dt.getUTCMinutes()).padStart(2,'0');
+}
+
+function updUtc(){
+  const sd=document.getElementById('startDate').value,ed=document.getElementById('endDate').value;
+  const st=getTimeStr('startHH','startMM'),et=getTimeStr('endHH','endMM');
+  const f=dt=>dt?dt.toISOString().split('T')[0]:'—';
+  const ft=dt=>dt?String(dt.getUTCHours()).padStart(2,'0')+':'+String(dt.getUTCMinutes()).padStart(2,'0')+' UTC':'—';
+  document.getElementById('startDateUtc').textContent=f(sd?toUtc(sd,'00:00'):null);
+  document.getElementById('endDateUtc').textContent=f(ed?toUtc(ed,'00:00'):null);
+  document.getElementById('startTimeUtc').textContent=ft(sd&&st?toUtc(sd,st):null);
+  document.getElementById('endTimeUtc').textContent=ft(ed&&et?toUtc(ed,et):null);
+}
+
+// ── MTOW FORMAT ──────────────────────────────────────────────────
+function fmtMtow(kg) {
+  const n = parseFloat(kg);
+  if (isNaN(n)) return '';
+  return (n % 1 === 0 ? n.toFixed(0) : n.toString()) + 'KG';
+}
+
+// ── GENERATE ─────────────────────────────────────────────────────
+function v(id){return document.getElementById(id).value.trim();}
+
+function generateNOTAM() {
+  const err=document.getElementById('errorMsg');err.style.display='none';
+  const req={
+    locName:v('locName'),lat:v('latD'),lon:v('lonD'),radius:v('radius'),
+    altM:v('altAgl'),freq:v('freq'),tel:v('opTel'),
+    aero:v('aeroDesig'),atcUnit:v('atcUnit'),arpDist:v('arpDist'),arpBrg:v('arpBrg'),
+    mtow:v('mtow'),sd:v('startDate'),ed:v('endDate'),
+    st:getTimeStr('startHH','startMM'),et:getTimeStr('endHH','endMM')
+  };
+  const miss=[];
+  if(!req.locName)miss.push('Location Name');
+  if(!req.lat)miss.push('Coordinates (drop a pin)');
+  if(!req.radius)miss.push('Radius');
+  if(!req.mtow)miss.push('MTOW');
+  if(!req.altM)miss.push('Max Altitude');
+  if(!req.freq)miss.push('Airband Frequency');
+  if(!req.tel)miss.push('Operator Telephone');
+  if(!req.aero)miss.push('Aerodrome ICAO');
+  if(!req.sd)miss.push('Start Date');
+  if(!req.st)miss.push('Start Time');
+  if(!req.ed)miss.push('End Date');
+  if(!req.et)miss.push('End Time');
+  if(miss.length){err.textContent='Missing: '+miss.join(', ');err.style.display='block';return;}
+
+  const startDt=toUtc(req.sd,req.st), endDt=toUtc(req.ed,req.et);
+  if(!startDt||!endDt){err.textContent='Invalid date/time values.';err.style.display='block';return;}
+  if(endDt<=startDt){err.textContent='End must be after start.';err.style.display='block';return;}
+
+  // Strip degree symbols for NOTAM coordinate output
+  const notamLat=req.lat.replace(/[°'"]/g,'');
+  const notamLon=req.lon.replace(/[°'"]/g,'');
+
+  const atcStr=req.atcUnit?` ${req.atcUnit}`:'';
+  const altFt=Math.round(parseFloat(req.altM)*3.28084/10)*10;
+  const altStr=altFt+'FT';
+  const wt=fmtMtow(req.mtow);
+  const startF=fmtNotam(startDt), endF=fmtNotam(endDt);
+
+  const brgLine=(req.arpBrg&&req.arpDist)
+    ?`\nBRG ${req.arpBrg} MAG ${Number(req.arpDist).toLocaleString()}M FM ARP`:'';
+
+  // Full NOTAM text
+  const notam=
+`UA OPS (MULTI-ROTOR ${wt}) WILL TAKE PLACE
+OPR WI ${req.radius}M OF PSN ${notamLat} ${notamLon} '${req.locName.toUpperCase()}'${brgLine}
+OPR WILL MNT ${req.aero}${atcStr} ${req.freq}
+OPR CTC TEL: ${req.tel}
+SFC TO ${altStr} AGL
+FROM ${startF} TO ${endF}`;
+
+  document.getElementById('notamOutput').textContent=notam;
+  document.getElementById('outputSection').classList.add('visible');
+
+  // ── NAIPS PORTAL FIELDS ─────────────────────────────────────────
+  const notamBody = notam;
+
+  const altFtNAIPS=String(altFt).padStart(3,'0')+' FT AGL';
+  const summary=(req.arpBrg&&req.arpDist)
+    ?`UA OPS BRG ${req.arpBrg} MAG ${Number(req.arpDist).toLocaleString()}M FM ARP`
+    :`UA OPS — ${req.aero}`;
+
+  const rows=[
+    {label:'Summary',      val:summary},
+    {label:'Item A — Location',   val:req.aero},
+    {label:'Item B — Start (UTC)',val:fmtNAIPS(startDt)},
+    {label:'Item C — End (UTC)',  val:fmtNAIPS(endDt)},
+    {label:'Item E — Subject',    val:`UA OPS (MULTI-ROTOR ${wt})`},
+    {label:'Item E — Status',     val:'WILL TAKE PLACE'},
+    {label:'Item E — Text',       val:notamBody},
+    {label:'Item F — Lower Limit',val:'SFC'},
+    {label:'Item G — Upper Limit',val:altFtNAIPS},
+  ];
+
+  const naipsContainer = document.getElementById('naipsRows');
+  naipsContainer.innerHTML = '';
+  rows.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'naips-row';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'naips-label';
+    lbl.textContent = r.label;
+
+    const val = document.createElement('span');
+    val.className = 'naips-val';
+    val.id = 'naips_' + i;
+    val.textContent = r.val;
+
+    const btn = document.createElement('button');
+    btn.className = 'naips-copy';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', () => copyNAIPSField('naips_' + i, btn));
+
+    row.appendChild(lbl);
+    row.appendChild(val);
+    row.appendChild(btn);
+    naipsContainer.appendChild(row);
+  });
+
+  const ns=document.getElementById('naipsSection');
+  ns.classList.add('visible');
+  ns.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function copyNOTAM(){
+  navigator.clipboard.writeText(document.getElementById('notamOutput').textContent).then(()=>{
+    const b=document.querySelector('.copy-btn'),o=b.textContent;
+    b.textContent='✓ Copied!';b.style.color='var(--green)';b.style.borderColor='var(--green)';
+    setTimeout(()=>{b.textContent=o;b.style.color='';b.style.borderColor='';},1800);
+  });
+}
+
+function copyNAIPSField(id,btn){
+  navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>{
+    const o=btn.textContent;
+    btn.textContent='✓';btn.style.color='var(--green)';btn.style.borderColor='var(--green)';
+    setTimeout(()=>{btn.textContent=o;btn.style.color='';btn.style.borderColor='';},1500);
+  });
+}
+
+// ── AIRSPACE OVERLAY ─────────────────────────────────────────────
+let airspaceGroup=null,airspaceOn=false,airspaceMoveTimer=null;
+
+function getAirspaceStyle(tags){
+  const as=(tags?.airspace||'').toLowerCase(),aw=(tags?.aeroway||'').toLowerCase();
+  if(as==='restricted'||aw==='restricted_area') return{color:'#ff4d6d',fillColor:'#ff4d6d',fillOpacity:0.12,weight:2,dashArray:'6,4'};
+  if(as==='danger') return{color:'#f0a500',fillColor:'#f0a500',fillOpacity:0.12,weight:2,dashArray:'8,4'};
+  if(as==='prohibited') return{color:'#cc0000',fillColor:'#cc0000',fillOpacity:0.22,weight:2};
+  if(aw==='controlzone'||as==='ctr') return{color:'#00b4d8',fillColor:'#00b4d8',fillOpacity:0.08,weight:2,dashArray:'4,4'};
+  if(aw==='aerodrome'||tags?.boundary==='aerodrome') return{color:'#00d68f',fillColor:'#00d68f',fillOpacity:0.08,weight:1.5};
+  return{color:'#7ec8e3',fillColor:'#7ec8e3',fillOpacity:0.06,weight:1.5,dashArray:'4,4'};
+}
+function buildAirspacePopup(tags){
+  if(!tags)return'Airspace';
+  const name=tags.name||tags['name:en']||'',icao=tags.icao||tags.ref||'',type=tags.airspace||tags.aeroway||'';
+  const upper=tags['airspace:upper_limit']||tags.upper||'',lower=tags['airspace:lower_limit']||tags.lower||'';
+  let h='';
+  if(name)h+=`<strong>${name}</strong><br>`;
+  if(icao)h+=`ICAO: ${icao}<br>`;
+  if(type)h+=`Type: ${type.toUpperCase()}<br>`;
+  if(upper)h+=`Upper: ${upper}<br>`;
+  if(lower)h+=`Lower: ${lower}`;
+  return h||'Airspace feature';
+}
+async function fetchAirspace(){
+  const btn=document.getElementById('airspaceBtn');btn.textContent='⟳ Loading…';
+  const b=map.getBounds();
+  const bb=`${b.getSouth().toFixed(4)},${b.getWest().toFixed(4)},${b.getNorth().toFixed(4)},${b.getEast().toFixed(4)}`;
+  const q=`[out:json][timeout:25];(node["aeroway"="aerodrome"](${bb});way["aeroway"="aerodrome"](${bb});way["aeroway"="controlzone"](${bb});relation["aeroway"="controlzone"](${bb});way["aeroway"="restricted_area"](${bb});relation["aeroway"="restricted_area"](${bb});way["airspace"](${bb});relation["airspace"](${bb});way["boundary"="aerodrome"](${bb});relation["boundary"="aerodrome"](${bb}););out geom tags;`;
+  try{
+    const res=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q)});
+    if(!res.ok)throw new Error();
+    const data=await res.json();
+    if(airspaceGroup)map.removeLayer(airspaceGroup);
+    airspaceGroup=L.layerGroup();
+    for(const el of(data.elements||[])){
+      if(el.type==='node'&&el.tags?.aeroway==='aerodrome'){
+        const icao=el.tags.icao||el.tags.ref||'',name=el.tags.name||'Aerodrome';
+        L.circleMarker([el.lat,el.lon],{radius:7,color:'#00d68f',fillColor:'#00d68f',fillOpacity:0.85,weight:2})
+          .bindPopup(`<strong>${icao||name}</strong>${icao?'<br>'+name:''}`).addTo(airspaceGroup);
+      } else if(el.type==='way'&&el.geometry?.length>2){
+        L.polygon(el.geometry.map(p=>[p.lat,p.lon]),getAirspaceStyle(el.tags)).bindPopup(buildAirspacePopup(el.tags)).addTo(airspaceGroup);
+      } else if(el.type==='relation'){
+        for(const m of(el.members||[])){
+          if((m.role==='outer'||m.role==='')&&m.geometry?.length>2)
+            L.polygon(m.geometry.map(p=>[p.lat,p.lon]),getAirspaceStyle(el.tags)).bindPopup(buildAirspacePopup(el.tags)).addTo(airspaceGroup);
+        }
+      }
+    }
+    airspaceGroup.addTo(map);
+    btn.textContent='🗺 Airspace ON';btn.style.color='var(--accent)';btn.style.borderColor='var(--accent)';btn.classList.add('active');
+  }catch(e){
+    btn.textContent='⚠ Failed — retry';btn.style.color='var(--red)';btn.style.borderColor='var(--red)';
+    setTimeout(()=>{btn.textContent='🗺 Airspace overlay';btn.style.color='';btn.style.borderColor='';btn.classList.remove('active');airspaceOn=false;},3000);
+  }
+}
+async function toggleAirspace(){
+  airspaceOn=!airspaceOn;
+  const btn=document.getElementById('airspaceBtn'),legend=document.getElementById('airspaceLegend');
+  if(airspaceOn){legend.classList.add('visible');await fetchAirspace();map.on('moveend',scheduleAirspaceFetch);}
+  else{if(airspaceGroup){map.removeLayer(airspaceGroup);airspaceGroup=null;}map.off('moveend',scheduleAirspaceFetch);legend.classList.remove('visible');btn.textContent='🗺 Airspace overlay';btn.style.color='';btn.style.borderColor='';btn.classList.remove('active');}
+}
+function scheduleAirspaceFetch(){clearTimeout(airspaceMoveTimer);airspaceMoveTimer=setTimeout(fetchAirspace,1500);}
+
+// ── MAP SEARCH ───────────────────────────────────────────────────
+let searchTimer=null;
+const searchInput=document.getElementById('mapSearch'),searchResults=document.getElementById('searchResults');
+searchInput.addEventListener('input',()=>{clearTimeout(searchTimer);const q=searchInput.value.trim();if(q.length<3){searchResults.classList.remove('open');return;}searchTimer=setTimeout(()=>runSearch(q),400);});
+searchInput.addEventListener('keydown',e=>{if(e.key==='Escape'){searchResults.classList.remove('open');searchInput.blur();}});
+document.addEventListener('click',e=>{if(!e.target.closest('.map-search-wrap'))searchResults.classList.remove('open');});
+async function doMapSearch(){const q=searchInput.value.trim();if(q.length<2)return;runSearch(q);}
+async function runSearch(q){
+  searchResults.innerHTML='<div class="search-loading">Searching…</div>';searchResults.classList.add('open');
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6&countrycodes=au`,{headers:{'Accept-Language':'en','User-Agent':'NOTAMCreator/1.0'}});
+    const data=await res.json();
+    if(!data.length){searchResults.innerHTML='<div class="search-loading">No results found.</div>';return;}
+    searchResults.innerHTML=data.map(item=>{
+      const name=item.display_name.split(',').slice(0,3).join(', ');
+      const sub=item.display_name.split(',').slice(3,6).join(', ').trim();
+      return`<div class="search-result-item" onclick="selectSearchResult(${item.lat},${item.lon},'${item.display_name.replace(/'/g,"\\'")}')"><div>${name}</div>${sub?`<div class="result-sub">${sub}</div>`:''}</div>`;
+    }).join('');
+  }catch(e){searchResults.innerHTML='<div class="search-loading">⚠ Search unavailable.</div>';}
+}
+function selectSearchResult(lat,lon,displayName){
+  searchResults.classList.remove('open');
+  searchInput.value=displayName.split(',').slice(0,2).join(', ');
+  map.setView([parseFloat(lat),parseFloat(lon)],15);
+  placePin(parseFloat(lat),parseFloat(lon));
+  const l=document.getElementById('locName');
+  if(!l.value)l.value=displayName.split(',')[0].trim();
+}
+</script>
+</body>
+</html>
