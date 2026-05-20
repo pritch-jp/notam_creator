@@ -143,6 +143,11 @@ body.fs-mode .wrap{max-width:100%;padding:1.5rem 2.5rem 3rem}
 .freq-chip{background:rgba(0,119,182,0.15);border:1px solid rgba(0,119,182,0.3);color:#7ec8e3;font-size:11px;font-family:var(--font-mono);padding:5px 10px;border-radius:5px;cursor:pointer;transition:all 0.15s}
 .freq-chip:hover{background:rgba(0,180,216,0.2);border-color:var(--accent);color:var(--accent)}
 .freq-chip.active{background:rgba(0,180,216,0.25);border-color:var(--accent);color:var(--accent)}
+.freq-warning{display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 12px;background:rgba(240,165,0,0.08);border:1px solid rgba(240,165,0,0.35);border-radius:7px;font-size:11px;font-family:var(--font-mono);color:var(--amber);line-height:1.5}
+.freq-warning-icon{flex-shrink:0;font-size:13px;margin-top:1px}
+.atc-presets{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.atc-preset{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--label);font-size:11px;font-family:var(--font-mono);padding:5px 14px;border-radius:6px;cursor:pointer;transition:all 0.15s}
+.atc-preset:hover,.atc-preset.active{background:rgba(0,180,216,0.15);border-color:var(--accent);color:var(--accent)}
 
 .btn-generate{width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:11px;font-size:15px;font-weight:800;font-family:var(--font-ui);cursor:pointer;letter-spacing:0.3px;transition:all 0.15s}
 .btn-generate:hover{background:#00cff5;transform:translateY(-1px)}
@@ -396,14 +401,22 @@ body.fs-mode .wrap{max-width:100%;padding:1.5rem 2.5rem 3rem}
           <div class="field">
             <label>ATC UNIT</label>
             <input type="text" id="atcUnit" placeholder="TWR"/>
-            <span class="hint">TWR / APP / CTAF / GND</span>
+            <div class="atc-presets">
+              <button class="atc-preset" onclick="setAtcUnit('TWR')">TWR</button>
+              <button class="atc-preset" onclick="setAtcUnit('GND')">GND</button>
+              <button class="atc-preset" onclick="setAtcUnit('CTAF')">CTAF</button>
+              <button class="atc-preset" onclick="setAtcUnit('APP')">APP</button>
+            </div>
           </div>
         </div>
         <div class="field" style="margin-bottom:12px">
           <label>AIRBAND FREQUENCY (MHz)</label>
-          <input type="text" id="freq" placeholder="Select aerodrome or type frequency"/>
-          <div class="hint" id="freqHint">Apply an aerodrome above to load its frequencies, or select manually:</div>
+          <input type="text" id="freq" placeholder="Type frequency or select below"/>
           <div class="freq-suggest" id="freqSuggest"></div>
+          <div class="freq-warning">
+            <span class="freq-warning-icon">⚠</span>
+            <span>Suggested common frequencies only — always verify the correct frequency against the current <strong>Airservices Australia ERSA FAC</strong> before filing.</span>
+          </div>
         </div>
         <div class="field">
           <label>OPERATOR CONTACT (TEL)</label>
@@ -977,71 +990,30 @@ function applyAerodrome() {
   arpLine=L.polyline([[pinLat,pinLon],[foundAero.lat,foundAero.lon]],{color:'#f0a500',weight:1.5,dashArray:'6,5',opacity:0.7}).addTo(map);
   map.fitBounds([[pinLat,pinLon],[foundAero.lat,foundAero.lon]],{padding:[50,50]});
   const c=document.getElementById('aeroCard');c.classList.add('applied');setTimeout(()=>c.classList.remove('applied'),1500);
-  updateFreqChips(foundAero.icao);
+  updateFreqChips();
 }
+
+function setAtcUnit(unit) {
+  document.getElementById('atcUnit').value = unit;
+  document.querySelectorAll('.atc-preset').forEach(b =>
+    b.classList.toggle('active', b.textContent === unit)
+  );
+}
+document.getElementById('atcUnit').addEventListener('input', function() {
+  document.querySelectorAll('.atc-preset').forEach(b =>
+    b.classList.toggle('active', b.textContent === this.value.toUpperCase())
+  );
+});
 
 document.getElementById('aeroDesig').addEventListener('input', function(){
   this.value=this.value.toUpperCase();
-  updateFreqChips(this.value);
+  updateFreqChips();
 });
 
-// ── FREQUENCY CHIPS ──────────────────────────────────────────────
-const AERO_FREQS = {
-  'YBBN':[{f:'120.5',l:'TWR'},{f:'124.7',l:'GND'},{f:'125.6',l:'APP'},{f:'126.25',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YBAF':[{f:'118.1',l:'TWR'},{f:'130.0',l:'GND'},{f:'119.1',l:'APP'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
-  'YBCG':[{f:'118.7',l:'TWR'},{f:'121.8',l:'GND'},{f:'123.75',l:'APP'},{f:'128.35',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YSSY':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'124.4',l:'APP'},{f:'126.25',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YMML':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'132.0',l:'APP'},{f:'118.0',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YPPH':[{f:'121.7',l:'TWR'},{f:'121.9',l:'GND'},{f:'123.6',l:'APP'},{f:'127.8',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YPDN':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.2',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YBCS':[{f:'124.2',l:'TWR'},{f:'121.9',l:'GND'},{f:'119.4',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YBTL':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.1',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YADL':[{f:'120.5',l:'TWR'},{f:'121.7',l:'GND'},{f:'118.2',l:'APP'},{f:'128.05',l:'ATIS'},{f:'121.5',l:'GUARD'}],
-  'YSCB':[{f:'118.7',l:'TWR'},{f:'121.7',l:'GND'},{f:'124.5',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YMHB':[{f:'118.1',l:'TWR'},{f:'121.9',l:'GND'},{f:'125.55',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YBAS':[{f:'118.3',l:'TWR'},{f:'121.9',l:'GND'},{f:'119.3',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YBSG':[{f:'124.4',l:'TWR'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
-  'YTWB':[{f:'118.3',l:'TWR'},{f:'118.3',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBTB':[{f:'122.1',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBRK':[{f:'118.6',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBMK':[{f:'119.1',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YGLI':[{f:'118.1',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBHD':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YHBA':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBHM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YLST':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YQLP':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YROM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBWN':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBMA':[{f:'118.3',l:'TWR'},{f:'121.5',l:'GUARD'}],
-  'YBLT':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YCIN':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YBOK':[{f:'122.9',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YAMB':[{f:'120.1',l:'TWR'},{f:'126.7',l:'MBZ'},{f:'121.5',l:'GUARD'}],
-  'YWLM':[{f:'118.3',l:'TWR'},{f:'123.3',l:'APP'},{f:'121.5',l:'GUARD'}],
-  'YCFS':[{f:'118.4',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YSTW':[{f:'118.8',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YDBI':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YPAM':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YPKA':[{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YPKG':[{f:'118.3',l:'TWR'},{f:'121.5',l:'GUARD'}],
-  'YMBU':[{f:'118.3',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YSWG':[{f:'118.4',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YALA':[{f:'121.8',l:'TWR'},{f:'126.7',l:'CTAF'},{f:'121.5',l:'GUARD'}],
-  'YMAV':[{f:'120.1',l:'TWR'},{f:'121.7',l:'GND'},{f:'125.1',l:'APP'},{f:'121.5',l:'GUARD'}],
-};
-
-function updateFreqChips(icao) {
+function updateFreqChips() {
   const container=document.getElementById('freqSuggest');
-  const hint=document.getElementById('freqHint');
-  const freqs=icao?AERO_FREQS[icao.toUpperCase()]:null;
-  if(freqs){
-    hint.textContent=`Frequencies for ${icao.toUpperCase()} — verify against current AIP ERSA:`;
-    container.innerHTML=freqs.map(({f,l})=>`<span class="freq-chip" data-freq="${f}">${f} ${l}</span>`).join('');
-  } else {
-    hint.textContent=icao?`No frequency data for ${icao.toUpperCase()} — select manually or check AIP ERSA:`:'Apply an aerodrome above to load its frequencies, or select manually:';
-    container.innerHTML=`<span class="freq-chip" data-freq="126.7">126.7 MBZ</span><span class="freq-chip" data-freq="121.5">121.5 GUARD</span><span class="freq-chip" data-freq="123.0">123.0 CTAF</span><span class="freq-chip" data-freq="122.9">122.9 CTAF</span>`;
-  }
+  const common=['121.5','126.7','122.9','123.0','120.5','118.3','118.1'];
+  container.innerHTML=common.map(f=>`<span class="freq-chip" data-freq="${f}">${f}</span>`).join('');
   container.querySelectorAll('.freq-chip').forEach(chip=>{
     chip.addEventListener('click',()=>{
       container.querySelectorAll('.freq-chip').forEach(c=>c.classList.remove('active'));
@@ -1050,7 +1022,7 @@ function updateFreqChips(icao) {
     });
   });
 }
-updateFreqChips(null);
+updateFreqChips();
 
 // ── CALENDAR ─────────────────────────────────────────────────────
 const calState={start:{year:0,month:0,selected:null},end:{year:0,month:0,selected:null}};
@@ -1172,8 +1144,11 @@ function generateNOTAM() {
   const wt=fmtMtow(req.mtow);
   const startF=fmtNotam(startDt), endF=fmtNotam(endDt);
 
+  // Distance: metres if < 2NM (3704m), else NM to 2dp
+  const _dist=Number(req.arpDist)||0;
+  const distStr=_dist>0?(_dist<3704?Math.round(_dist)+'M':((_dist/1852).toFixed(2))+'NM'):'';
   const brgLine=(req.arpBrg&&req.arpDist)
-    ?`\nBRG ${req.arpBrg} MAG ${Number(req.arpDist).toLocaleString()}M FM ARP`:'';
+    ?`\nBRG ${req.arpBrg} MAG ${distStr} FM ARP`:'';
 
   // Full NOTAM text
   const notam=
@@ -1192,8 +1167,13 @@ FROM ${startF} TO ${endF}`;
 
   const altFtNAIPS=String(altFt).padStart(3,'0')+' FT AGL';
   const summary=(req.arpBrg&&req.arpDist)
-    ?`UA OPS BRG ${req.arpBrg} MAG ${Number(req.arpDist).toLocaleString()}M FM ARP`
+    ?`UA OPS BRG ${req.arpBrg} MAG ${distStr} FM ARP`
     :`UA OPS — ${req.aero}`;
+
+  // Item E Text: full NOTAM body minus the altitude and time lines (those are in Items B/C/F/G)
+  const notamBodyE = notamBody.split('\n')
+    .filter(l => !l.startsWith('SFC TO') && !l.startsWith('FROM '))
+    .join('\n').trimEnd();
 
   const rows=[
     {label:'Summary',      val:summary},
@@ -1202,7 +1182,7 @@ FROM ${startF} TO ${endF}`;
     {label:'Item C — End (UTC)',  val:fmtNAIPS(endDt)},
     {label:'Item E — Subject',    val:`UA OPS (MULTI-ROTOR ${wt})`},
     {label:'Item E — Status',     val:'WILL TAKE PLACE'},
-    {label:'Item E — Text',       val:notamBody},
+    {label:'Item E — Text',       val:notamBodyE},
     {label:'Item F — Lower Limit',val:'SFC'},
     {label:'Item G — Upper Limit',val:altFtNAIPS},
   ];
