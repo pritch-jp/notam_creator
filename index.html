@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>NOTAM Creator — UA Operations</title>
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHRleHQgeT0iMjYiIHg9IjE2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjI0Ij7inIg8L3RleHQ+PC9zdmc+" type="image/svg+xml"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -449,31 +450,51 @@ body.fs-mode .wrap{max-width:100%;padding:1.5rem 2.5rem 3rem}
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 document.getElementById('tzInfo').textContent = 'Local timezone: ' + tz;
 
-// ── FULLSCREEN ───────────────────────────────────────────────────
-function toggleFS() {
-  const lbl = document.getElementById('fsLabel'), ico = document.getElementById('fsIcon');
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().then(() => {
-      document.body.classList.add('fs-mode');
-      lbl.textContent = 'Exit full screen';
-      ico.innerHTML = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
-      setTimeout(() => map.invalidateSize(), 250);
-    }).catch(() => {});
-  } else {
-    document.exitFullscreen().then(() => {
-      document.body.classList.remove('fs-mode');
-      lbl.textContent = 'Full screen';
-      ico.innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
-      setTimeout(() => map.invalidateSize(), 250);
-    }).catch(() => {});
+// ── AUTO-RESIZE (posts content height to parent iframe) ──────────
+function postHeight() {
+  if (window.parent !== window) {
+    window.parent.postMessage(
+      { type: 'notam-resize', height: document.documentElement.scrollHeight }, '*'
+    );
   }
 }
+new ResizeObserver(postHeight).observe(document.documentElement);
+window.addEventListener('load', postHeight);
+
+// ── FULLSCREEN ───────────────────────────────────────────────────
+const FS_ENTER_ICO = '<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>';
+const FS_EXIT_ICO  = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
+let fsActive = false;
+function applyFsState(active) {
+  fsActive = active;
+  document.body.classList.toggle('fs-mode', active);
+  document.getElementById('fsLabel').textContent = active ? 'Exit full screen' : 'Full screen';
+  document.getElementById('fsIcon').innerHTML = active ? FS_ENTER_ICO : FS_EXIT_ICO;
+  setTimeout(() => map.invalidateSize(), 250);
+}
+function toggleFS() {
+  if (!fsActive) {
+    // Try direct fullscreen first; fall back to asking parent
+    const p = document.documentElement.requestFullscreen
+      ? document.documentElement.requestFullscreen()
+      : Promise.reject();
+    p.then(() => applyFsState(true))
+     .catch(() => window.parent.postMessage({ type: 'notam-fs-enter' }, '*'));
+  } else {
+    const p = document.fullscreenElement
+      ? document.exitFullscreen()
+      : Promise.reject();
+    p.then(() => applyFsState(false))
+     .catch(() => window.parent.postMessage({ type: 'notam-fs-exit' }, '*'));
+  }
+}
+// Parent tells us fullscreen state changed (when parent controls it)
+window.addEventListener('message', e => {
+  if (e.data?.type === 'notam-fs-state') applyFsState(e.data.active);
+});
 document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    document.body.classList.remove('fs-mode');
-    document.getElementById('fsLabel').textContent = 'Full screen';
-    document.getElementById('fsIcon').innerHTML = '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>';
-    setTimeout(() => map.invalidateSize(), 250);
+  if (!document.fullscreenElement && fsActive) applyFsState(false);
+  if (document.fullscreenElement && !fsActive) applyFsState(true);
   }
 });
 
